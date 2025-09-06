@@ -1,0 +1,8 @@
+flask
+flask-cors
+face-recognition
+dlib-bin
+numpy
+requests
+supabase
+gunicorn
