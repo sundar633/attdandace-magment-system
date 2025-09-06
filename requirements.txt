@@ -4,7 +4,6 @@ numpy
 requests
 supabase
 gunicorn
-face-recognition
 dlib-bin
-# Prevent pip from trying to build dlib from source
-dlib==19.24.4 --only-binary=:all: --extra-index-url https://pypi.org/simple
+face-recognition
+--extra-index-url https://pypi.org/simple
