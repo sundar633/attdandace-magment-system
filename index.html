@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Registration & Attendance</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .btn { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 5px; margin: 5px; }
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background: white; padding: 20px; border-radius: 10px; width: 350px; position: relative;
+    }
+    .close { position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 18px; }
+    input, select { width: 100%; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 5px; }
+    #preview { margin-top: 10px; max-width: 150px; max-height: 150px; border-radius: 10px; }
+    video { width: 100%; border-radius: 10px; }
+    #popupMessage {
+      display: none;
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <button class="btn" onclick="openModal()">Student Registration</button>
+  <button class="btn" onclick="openAttendanceModal()">Mark Attendance</button>
+
+  <!-- Popup -->
+  <div id="popupMessage"></div>
+
+  <!-- Attendance Modal -->
+  <div id="attendanceModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeAttendanceModal()">&times;</span>
+      <h2>Mark Attendance</h2>
+      <div style="text-align:center;">
+        <video id="attendanceVideo" autoplay playsinline></video>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student Registration Modal -->
+  <div id="studentModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h2>Student Registration</h2>
+
+      <input type="text" id="studentName" placeholder="Student Name">
+      <input type="text" id="studentId" placeholder="Student ID">
+      <input type="text" id="collegeName" placeholder="College Name">
+
+      <select id="uploadOption" onchange="handleUploadOption(this.value)">
+        <option value="">Upload Picture</option>
+        <option value="gallery">Upload from Gallery</option>
+        <option value="camera">Take a Picture</option>
+      </select>
+
+      <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="previewFile(event)">
+
+      <div id="cameraContainer" style="display:none; text-align:center;">
+        <video id="video" autoplay playsinline></video>
+        <button type="button" class="btn" onclick="capturePhoto()">Capture</button>
+      </div>
+
+      <img id="preview" src="" alt="Preview" style="display:none;">
+
+      <button class="btn" style="width:100%; margin-top:10px;" onclick="submitForm()">Submit</button>
+    </div>
+  </div>
+
+  <!-- Face API + Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // Supabase Setup
+    const supabaseUrl = "https://punnqvevnkhsjoytugie.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1bm5xdmV2bmtoc2pveXR1Z2llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTUwOTQsImV4cCI6MjA3MjU3MTA5NH0.i-cH0GYuaFlpkxs3hGhdPbitNyYkj_4WnklxoaoLBgM";
+    const client = supabase.createClient(supabaseUrl, supabaseKey);
+
+    let selectedFile = null;
+
+    // ---------- Student Registration ----------
+    function openModal() {
+      document.getElementById("studentModal").style.display = "flex";
+    }
+    function closeModal() {
+      document.getElementById("studentModal").style.display = "none";
+      stopCamera();
+    }
+
+    function handleUploadOption(value) {
+      if (value === "gallery") document.getElementById("fileInput").click();
+      else if (value === "camera") startCamera();
+    }
+
+    function previewFile(event) {
+      selectedFile = event.target.files[0];
+      if (selectedFile) {
+        const preview = document.getElementById("preview");
+        preview.src = URL.createObjectURL(selectedFile);
+        preview.style.display = "block";
+      }
+    }
+
+    function startCamera() {
+      const video = document.getElementById("video");
+      document.getElementById("cameraContainer").style.display = "block";
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => alert("Camera access denied: " + err));
+    }
+
+    function stopCamera() {
+      const video = document.getElementById("video");
+      const stream = video.srcObject;
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+      document.getElementById("cameraContainer").style.display = "none";
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById("video");
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        selectedFile = new File([blob], "camera_capture.png", { type: "image/png" });
+        const preview = document.getElementById("preview");
+        preview.src = URL.createObjectURL(selectedFile);
+        preview.style.display = "block";
+        stopCamera();
+      }, "image/png");
+    }
+
+    async function submitForm() {
+      const name = document.getElementById("studentName").value.trim();
+      const id = document.getElementById("studentId").value.trim();
+      const college = document.getElementById("collegeName").value.trim();
+
+      if (!name || !id || !college || !selectedFile) {
+        alert("Please fill all fields and upload a picture.");
+        return;
+      }
+
+      const filePath = `student_${Date.now()}_${selectedFile.name}`;
+      const { error } = await client.storage.from("student-photos").upload(filePath, selectedFile);
+      if (error) { alert("Image upload failed: " + error.message); return; }
+
+      const imageUrl = `${supabaseUrl}/storage/v1/object/public/student-photos/${filePath}`;
+      const { error: dbError } = await client.from("students").insert([{ name, student_id: id, college, image_url: imageUrl }]);
+      if (dbError) {
+        if (dbError.code === "23505") alert("❌ Student ID already exists!");
+        else alert("Failed: " + dbError.message);
+      } else {
+        alert("✅ Student Registered Successfully!");
+        closeModal();
+      }
+    }
+
+   // ---------- Attendance (Backend-Powered) ----------
+
+function openAttendanceModal() {
+  document.getElementById("attendanceModal").style.display = "flex";
+  startAttendanceCamera();
+}
+
+function closeAttendanceModal() {
+  document.getElementById("attendanceModal").style.display = "none";
+  const video = document.getElementById("attendanceVideo");
+  if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+}
+
+async function startAttendanceCamera() {
+  const video = document.getElementById("attendanceVideo");
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+
+    video.onloadedmetadata = () => {
+      video.play();
+
+      // Capture one frame after 3 seconds to give user time
+      setTimeout(() => {
+        captureAndSendAttendance(video);
+      }, 3000);
+    };
+  } catch (err) {
+    showPopup("❌ Unable to access camera: " + err.message);
+  }
+}
+
+function captureAndSendAttendance(video) {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(blob => {
+    const formData = new FormData();
+    formData.append("image", blob, "attendance.png");
+
+    fetch("http://localhost:5000/mark_attendance", {
+      method: "POST",
+      body: formData
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.message) {
+          showPopup("✅ " + data.message);
+        } else if (data.error) {
+          showPopup("❌ " + data.error);
+        }
+      })
+      .catch(err => {
+        showPopup("❌ Error sending image: " + err.message);
+      });
+  }, "image/png");
+}
+
+function showPopup(message) {
+  const popup = document.getElementById("popupMessage");
+  popup.textContent = message;
+  popup.style.display = "block";
+  setTimeout(() => {
+    popup.style.display = "none";
+  }, 3000);
+}
+
+  </script>
+</body>
+</html>
