@@ -1,8 +1,8 @@
 flask
 flask-cors
-face-recognition
-dlib-bin
 numpy
 requests
 supabase
 gunicorn
+face-recognition
+dlib-bin
